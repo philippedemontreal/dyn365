@@ -16,7 +16,7 @@ var myClient;
             class gridHandler {
                 constructor(context, grid) {
                     this.onRecordCountRetrieved = (totalRecordCount) => {
-                        this.context.ui.setFormNotification(`Grid '${this.grid.getName()}' has ${totalRecordCount} total records`, "INFO", this.grid.getName());
+                        this.context.ui.setFormNotification(`Grid '${this.grid.getName()}' has a total of ${totalRecordCount} record(s)`, "INFO", this.grid.getName());
                         console.error(`Grid '${this.grid.getName()}' has ${totalRecordCount} total records`);
                     };
                     this.onLoad = () => __awaiter(this, void 0, void 0, function* () {

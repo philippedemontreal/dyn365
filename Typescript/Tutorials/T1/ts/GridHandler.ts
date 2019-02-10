@@ -27,7 +27,7 @@ namespace  myClient.myProject.common {
         
         
         private onRecordCountRetrieved = (totalRecordCount:number) => {
-            this.context.ui.setFormNotification(`Grid '${this.grid.getName()}' has ${totalRecordCount} total records`, "INFO", this.grid.getName());
+            this.context.ui.setFormNotification(`Grid '${this.grid.getName()}' has a total of ${totalRecordCount} record(s)`, "INFO", this.grid.getName());
             console.error(`Grid '${this.grid.getName()}' has ${totalRecordCount} total records`);
         };
 
