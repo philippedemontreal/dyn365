@@ -1,82 +1,91 @@
-namespace  myclient.myproject.common {
-    export class gridHandler
-    {
-        private grid: Xrm.Controls.GridControl;
-        private fetchXml: string;
-        private entityName: string;
-        private context: Xrm.FormContext;
+namespace myclient.myproject.common {
+    type getFetchXmlFn = () => string;
     
-        constructor(context: Xrm.FormContext, entityname: string, fetchXml: string, grid: Xrm.Controls.GridControl)
-        {
+    export class gridHandler {
+        //The grid control to add functionality
+        private grid: Xrm.Controls.GridControl;
+        //Function to retrieve the fetchml to use when the grid is loaded to retrieve record count
+        private getFetchXml: getFetchXmlFn;
+        //entityName used in webapi
+        private entityName: string;
+        //Xrm form context
+        private context: Xrm.FormContext;
+
+        constructor(context: Xrm.FormContext, entityname: string, getFetchXml: getFetchXmlFn, grid: Xrm.Controls.GridControl) {
             this.context = context;
             this.grid = grid;
             this.entityName = entityname;
-            this.fetchXml = "?fetchXml=" +  encodeURIComponent(fetchXml);                              
+            this.getFetchXml = getFetchXml;
             this.grid.addOnLoad(this.onLoad);
         }
-        
-        private onRecordCountRetrieved = (totalRecordCount:number) => {
+
+        //function used when the record count is retrieved either from grid or webapi
+        private onRecordCountRetrieved = (totalRecordCount: number) => {
             this.context.ui.setFormNotification(`Grid '${this.grid.getName()}' a total of ${totalRecordCount} record(s).`, "INFO", this.grid.getName());
             console.log(`Grid '${this.grid.getName()}' has a total of ${totalRecordCount} record(s).`);
         };
 
-         private onLoad = async () => {  
+        //function used on the grid event, onLoad
+        private onLoad = async () => {
             let grid = this.grid.getGrid();
             //let self = this;
             let recordCount: number = grid.getTotalRecordCount();
-            if (recordCount === -1) {
+            if (recordCount === -1) { //Use webapi to get the real count
                 try {
-                    var result = await Xrm.WebApi.online.retrieveMultipleRecords(this.entityName, this.fetchXml);
+                    let fetchXml = this.getFetchXml();
+                    if (!fetchXml) {
+                        console.log(`No fetchXml...`);
+                        return;
+                    }
+                    console.log(`Retrieving count using fetchXml...`);
+                    fetchXml = "?fetchXml=" + encodeURIComponent(fetchXml);
+                    var result = await Xrm.WebApi.online.retrieveMultipleRecords(this.entityName, fetchXml);
                     //self.onRecordCountRetrieved(result.entities[0].count);
                     this.onRecordCountRetrieved(result.entities[0].count);
-                        
                 } catch (error) {
-                    console.error(error);                    
+                    console.error(error && error.message ? error.message : `Unknown error occured`);
                 }
-
             } else {
                 this.onRecordCountRetrieved(recordCount);
             }
         }
-    }   
-}
-
-namespace  myclient.myproject.events {
-    export class accountform {
-        
-        private static contactGrid : common.gridHandler;
-
-        private static Initialize(context: Xrm.FormContext, entity: Xrm.Entity){
-            console.log(`Initializing contact grid...`);
-
-            let grid = context.getControl<Xrm.Controls.GridControl>("Contacts");           
-            let fetchXml =           
-`<fetch distinct='false' mapping='logical' aggregate='true'>
-<entity name='contact'>
-<attribute name='contactid' aggregate='count' alias='count'/>
-<filter type='and'>
-<condition attribute='parentcustomerid' operator='eq' value='${entity.getId().replace('{', '').replace('}', '')}'/>
-<condition attribute='statecode' operator='eq' value='0'/>
-</filter>
-</entity>
-</fetch>`;      
-                
-            accountform.contactGrid = new common.gridHandler(context, entity.getEntityName(), fetchXml, grid);      
-        }
-
-        
-        public static onLoad(eventcontext: Xrm.Events.EventContext) {       
-         
-            console.log(`Loading account form...`);
-            if (!accountform.contactGrid){
-                let context = eventcontext.getFormContext();
-                let entity = context.data.entity;
-                let entityId = entity.getId();
-                if (entityId !== null) {
-                    accountform.Initialize(context, entity);
-                }                   
-            }
-        }        
     }
 }
 
+namespace myclient.myproject.events {
+    export class accountform {
+
+        private static contactGrid: common.gridHandler;
+
+        public static onLoad(eventcontext: Xrm.Events.EventContext) {
+
+            let context = eventcontext.getFormContext();
+            console.log(`Loading account form...`);
+
+            let entity = context.data.entity;
+            let grid = context.getControl<Xrm.Controls.GridControl>("Contacts");
+
+            accountform.contactGrid = new common.gridHandler(
+                context,
+                entity.getEntityName(),
+                () => {
+                    let entityId = entity.getId();
+                    if (entity !== null) {
+                        return;
+                    }
+
+                    let fetchXml =
+                        `<fetch distinct='false' mapping='logical' aggregate='true'>
+<entity name='contact'>
+<attribute name='contactid' aggregate='count' alias='count'/>
+<filter type='and'>
+<condition attribute='parentcustomerid' operator='eq' value='${entityId.replace('{', '').replace('}', '')}'/>
+<condition attribute='statecode' operator='eq' value='0'/>
+</filter>
+</entity>
+</fetch>`;
+                    return fetchXml;
+                }, grid);
+        }
+    }
+}
