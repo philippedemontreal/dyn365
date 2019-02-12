@@ -1,4 +1,3 @@
-"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -14,21 +13,32 @@ var myclient;
         var common;
         (function (common) {
             class gridHandler {
-                constructor(context, entityname, fetchXml, grid) {
+                constructor(context, entityname, getFetchXml, grid) {
+                    //function used when the record count is retrieved either from grid or webapi
                     this.onRecordCountRetrieved = (totalRecordCount) => {
                         this.context.ui.setFormNotification(`Grid '${this.grid.getName()}' a total of ${totalRecordCount} record(s).`, "INFO", this.grid.getName());
                         console.log(`Grid '${this.grid.getName()}' has a total of ${totalRecordCount} record(s).`);
                     };
+                    //function used on the grid event, onLoad
                     this.onLoad = () => __awaiter(this, void 0, void 0, function* () {
                         let grid = this.grid.getGrid();
+                        //let self = this;
                         let recordCount = grid.getTotalRecordCount();
-                        if (recordCount === -1) {
+                        if (recordCount === -1) { //Use webapi to get the real count
                             try {
-                                var result = yield Xrm.WebApi.online.retrieveMultipleRecords(this.entityName, this.fetchXml);
+                                let fetchXml = this.getFetchXml();
+                                if (!fetchXml) {
+                                    console.log(`No fetchXml...`);
+                                    return;
+                                }
+                                console.log(`Retrieving count using fetchXml...`);
+                                fetchXml = "?fetchXml=" + encodeURIComponent(fetchXml);
+                                var result = yield Xrm.WebApi.online.retrieveMultipleRecords(this.entityName, fetchXml);
+                                //self.onRecordCountRetrieved(result.entities[0].count);
                                 this.onRecordCountRetrieved(result.entities[0].count);
                             }
                             catch (error) {
-                                console.error(error);
+                                console.error(error && error.message ? error.message : `Unknown error occured`);
                             }
                         }
                         else {
@@ -38,7 +48,7 @@ var myclient;
                     this.context = context;
                     this.grid = grid;
                     this.entityName = entityname;
-                    this.fetchXml = "?fetchXml=" + encodeURIComponent(fetchXml);
+                    this.getFetchXml = getFetchXml;
                     this.grid.addOnLoad(this.onLoad);
                 }
             }
@@ -52,33 +62,31 @@ var myclient;
         var events;
         (function (events) {
             class accountform {
-                static Initialize(context, entity) {
-                    console.log(`Initializing contact grid...`);
+                static onLoad(eventcontext) {
+                    let context = eventcontext.getFormContext();
+                    console.log(`Loading account form...`);
+                    let entity = context.data.entity;
                     let grid = context.getControl("Contacts");
-                    let fetchXml = `<fetch distinct='false' mapping='logical' aggregate='true'>
+                    accountform.contactGrid = new myproject.common.gridHandler(context, entity.getEntityName(), () => {
+                        let entityId = entity.getId();
+                        if (entity !== null) {
+                            return;
+                        }
+                        let fetchXml = `<fetch distinct='false' mapping='logical' aggregate='true'>
 <entity name='contact'>
 <attribute name='contactid' aggregate='count' alias='count'/>
 <filter type='and'>
-<condition attribute='parentcustomerid' operator='eq' value='${entity.getId().replace('{', '').replace('}', '')}'/>
+<condition attribute='parentcustomerid' operator='eq' value='${entityId.replace('{', '').replace('}', '')}'/>
 <condition attribute='statecode' operator='eq' value='0'/>
 </filter>
 </entity>
 </fetch>`;
-                    accountform.contactGrid = new myproject.common.gridHandler(context, entity.getEntityName(), fetchXml, grid);
-                }
-                static onLoad(eventcontext) {
-                    console.log(`Loading account form...`);
-                    if (!accountform.contactGrid) {
-                        let context = eventcontext.getFormContext();
-                        let entity = context.data.entity;
-                        let entityId = entity.getId();
-                        if (entityId !== null) {
-                            accountform.Initialize(context, entity);
-                        }
-                    }
+                        return fetchXml;
+                    }, grid);
                 }
             }
             events.accountform = accountform;
         })(events = myproject.events || (myproject.events = {}));
     })(myproject = myclient.myproject || (myclient.myproject = {}));
 })(myclient || (myclient = {}));
+//# sourceMappingURL=GridHandler.js.map
